@@ -65,6 +65,9 @@ static void cleanup_state(color_ostream &out);
 
 static int fix_job_postings(color_ostream *out = NULL, bool dry_run = false);
 
+// NUDIST
+command_result constraints_to_disk(color_ostream&, vector<string>&);
+
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
     if (!world || !ui)
@@ -1819,6 +1822,12 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
 
     std::string cmd = parameters.empty() ? "list" : parameters[0];
 
+    if (cmd == "dump") // NUDIST
+    {
+        constraints_to_disk(out, parameters);
+        return CR_OK;
+    }
+
     if (cmd == "enable" || cmd == "disable")
     {
         bool enable = (cmd == "enable");
@@ -1966,4 +1975,43 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
     }
     else
         return CR_WRONG_USAGE;
+}
+
+/******************************
+*  NUDIST                     *
+******************************/
+
+command_result constraints_to_disk(color_ostream& out, vector<string>& parameters)
+{
+    // DELETE ME
+    {
+        auto it = constraints.cbegin();
+        int i = 0;
+        for (it, i; it < constraints.cend(); ++it, ++i)
+        {
+            out.print("Entry #%u: %s\n", i, (*it)->item.toString().c_str());
+            out.print("   goalCount: %u\n", (*it)->goalCount());
+            out.print("   Material: %s\n", (*it)->material.toString());
+            out.print("   min_quality: %u\n", (*it)->min_quality);
+            out.print("   goal_gap: %u\n", (*it)->goalGap());
+            out.print("   item_count: %u\n", (*it)->item_count);
+            out.print("   item_amount: %u\n", (*it)->item_amount);
+        }
+    }
+    //
+
+
+    string par = "AMMO:ITEM_AMMO_BOLTS/WOOD";
+    int limit = 200, goal_gap = 50;
+    bool bool_set_by_count = false;
+    ItemConstraint *icv = get_constraint(out, par);
+    if (!icv)
+        return CR_FAILURE;
+
+    icv->setGoalByCount(bool_set_by_count);
+    icv->setGoalCount(limit);
+    icv->setGoalGap(goal_gap);
+    process_constraints(out);
+    print_constraint(out, icv);
+    return CR_OK;
 }
