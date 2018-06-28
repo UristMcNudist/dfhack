@@ -2014,7 +2014,7 @@ command_result export_constraints(color_ostream& out, vector<string>& parameters
     for (auto& i : items)
         if (i.isValid() && file.good())
         {
-            file << i.val().c_str() << '/' << i.ival(0) << '/' << i.ival(1) << std::endl;
+            file << i.val().c_str() << ';' << i.ival(0) << ';' << i.ival(1) << std::endl;
             out.print("# %s\n", i.val().c_str());
         }
     file.close();
@@ -2043,28 +2043,26 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
     while (std::getline(file, line))
     {
         /*
-        Constraint format: ITEM[:SUBTYPE]/[GENERIC_MAT,...]/[SPECIFIC_MAT:...]/[LOCAL,<quality>]
-        Token[0] == ITEM[:SUBTYPE]
-        Token[1] == [GENERIC_MAT, ...]
-        Token[2] == GoalCount
-        Token[3] == GoalGap
+        Token[0] == ITEM[:SUBTYPE]/[GENERIC_MAT,...]/[SPECIFIC_MAT:...]/[LOCAL,<quality>]
+        Token[1] == GoalCount
+        Token[2] == GoalGap
         */
         std::vector<std::string> tokens;
-        split_string(&tokens, line, "/");
+        split_string(&tokens, line, ";");
 
-        if (tokens.size() < 4)
+        if (tokens.size() < 3)
         {
             out.print("Error while parsing profile!\n");
             continue;
         }
 
-        ItemConstraint *icv = get_constraint(out, tokens[0] + "/" + tokens[1]);
+        ItemConstraint *icv = get_constraint(out, tokens[0]);
         if (!icv)
             return CR_FAILURE;
         
-        icv->setGoalByCount(atoi(tokens[3].c_str()) == -1);
-        icv->setGoalCount(atoi(tokens[2].c_str()));
-        icv->setGoalGap(atoi(tokens[3].c_str()));
+        icv->setGoalByCount(atoi(tokens[2].c_str()) == -1);
+        icv->setGoalCount(atoi(tokens[1].c_str()));
+        icv->setGoalGap(atoi(tokens[2].c_str()));
         process_constraints(out);
         print_constraint(out, icv);
     }
