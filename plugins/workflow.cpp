@@ -71,7 +71,8 @@ static void cleanup_state(color_ostream &out);
 static int fix_job_postings(color_ostream *out = NULL, bool dry_run = false);
 
 // NUDIST
-command_result constraints_to_disk(color_ostream&, vector<string>&);
+command_result import_constraints(color_ostream&, vector<string>&);
+command_result export_constraints(color_ostream&, vector<string>&);
 
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
@@ -1827,10 +1828,15 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
 
     std::string cmd = parameters.empty() ? "list" : parameters[0];
 
-    if (cmd == "dump") // NUDIST
+    if (cmd == "export") // NUDIST
     {
-        constraints_to_disk(out, parameters);
+        export_constraints(out, parameters);
         return CR_OK;
+    }
+
+    if (cmd == "import")
+    {
+        import_constraints(out, parameters);
     }
 
     if (cmd == "enable" || cmd == "disable")
@@ -1986,29 +1992,39 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
 *  NUDIST                     *
 ******************************/
 
-command_result constraints_to_disk(color_ostream& out, vector<string>& parameters)
+command_result export_constraints(color_ostream& out, vector<string>& parameters)
 {
-    std::fstream file("C:\\Users\\Stephan\\Documents\\workshop.profile", std::ios::out);
+    out.print("# parameters: %u\n", parameters.size());
+    for (auto& p : parameters)
+        out.print("%s\n", p);
+
+    std::fstream file("C:\\Users\\stephan\\Documents\\workshop.profile", std::ios::out);
     std::vector<PersistentDataItem> items;
 
 
 
     if (!file.is_open())
     {
-        out.print("%s", strerror(errno));
+        out.print("%s\n", strerror(errno));
         return CR_FAILURE;
     }
 
     World::GetPersistentData(&items, "workflow/constraints");
     for (auto& i : items)
         if (i.isValid() && file.good())
+        {
             file << i.val().c_str() << '/' << i.ival(0) << '/' << i.ival(1) << std::endl;
+            out.print("# %s\n", i.val().c_str());
+        }
     file.close();
     return CR_OK;
 }
 
-command_result constraint_from_disk(color_ostream& out, vector<string>& parameters)
+command_result import_constraints(color_ostream& out, vector<string>& parameters)
 {
+    out.print("# parameters: %u\n", parameters.size());
+    for (auto& p : parameters)
+        out.print("%s\n", p);
 
     string profilePath = "workflow.profile";
     if (parameters.size() > 0)
@@ -2018,7 +2034,7 @@ command_result constraint_from_disk(color_ostream& out, vector<string>& paramete
     
     if (!file.is_open())
     {
-        out.print("%s", strerror(errno));
+        out.print("%s\n", strerror(errno));
         return CR_FAILURE;
     }
 
@@ -2028,20 +2044,21 @@ command_result constraint_from_disk(color_ostream& out, vector<string>& paramete
         std::vector<std::string> tokens;
         split_string(&tokens, line, "/");
 
-        if (tokens.size() < 3)
+        if (tokens.size() < 4)
         {
-            out.print("Error while parsing profile!");
+            out.print("Error while parsing profile!\n");
             continue;
         }
 
-        //ItemConstraint *icv = get_constraint(out, tokens[0] + tokens[1]);
-        //if (!icv)
-        //    return CR_FAILURE;
-        //
-        //icv->setGoalByCount(token[]);
-        //icv->setGoalCount(limit);
-        //icv->setGoalGap(goal_gap);
-        //process_constraints(out);
-        //print_constraint(out, icv);
+        ItemConstraint *icv = get_constraint(out, tokens[0] + tokens[1]);
+        if (!icv)
+            return CR_FAILURE;
+        
+        icv->setGoalByCount(atoi(tokens[3].c_str()) == -1);
+        icv->setGoalCount(atoi(tokens[2].c_str()));
+        icv->setGoalGap(atoi(tokens[3].c_str()));
+        process_constraints(out);
+        print_constraint(out, icv);
     }
+    return CR_OK;
 }
