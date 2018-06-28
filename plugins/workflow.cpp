@@ -1837,6 +1837,7 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
     if (cmd == "import")
     {
         import_constraints(out, parameters);
+        return CR_OK;
     }
 
     if (cmd == "enable" || cmd == "disable")
@@ -2026,9 +2027,9 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
     for (auto& p : parameters)
         out.print("%s\n", p);
 
-    string profilePath = "workflow.profile";
-    if (parameters.size() > 0)
-        profilePath = parameters[0];
+    string profilePath = "C:\\Users\\stephan\\Documents\\workshop.profile";
+    //if (parameters.size() > 0)
+    //    profilePath = parameters[0];
 
     std::ifstream file(profilePath.c_str(), std::ios::in);
     
@@ -2041,6 +2042,13 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
     string line;
     while (std::getline(file, line))
     {
+        /*
+        Constraint format: ITEM[:SUBTYPE]/[GENERIC_MAT,...]/[SPECIFIC_MAT:...]/[LOCAL,<quality>]
+        Token[0] == ITEM[:SUBTYPE]
+        Token[1] == [GENERIC_MAT, ...]
+        Token[2] == GoalCount
+        Token[3] == GoalGap
+        */
         std::vector<std::string> tokens;
         split_string(&tokens, line, "/");
 
@@ -2050,7 +2058,7 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
             continue;
         }
 
-        ItemConstraint *icv = get_constraint(out, tokens[0] + tokens[1]);
+        ItemConstraint *icv = get_constraint(out, tokens[0] + "/" + tokens[1]);
         if (!icv)
             return CR_FAILURE;
         
