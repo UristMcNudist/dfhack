@@ -2,6 +2,8 @@
 #include <iostream>
 #include <sstream>
 #include <memory>
+#include <regex>
+#include <string>
 
 #include "Core.h"
 #include "Console.h"
@@ -70,9 +72,12 @@ static void cleanup_state(color_ostream &out);
 
 static int fix_job_postings(color_ostream *out = NULL, bool dry_run = false);
 
-// NUDIST
-command_result import_constraints(color_ostream&, vector<string>&);
-command_result export_constraints(color_ostream&, vector<string>&);
+// NUDIST import/export functionality
+const char profile_version = 1; // current profile version
+const char profile_compat = 1; // minimum compatible profile version, just in case
+command_result import_constraints(color_ostream&, std::vector<std::string>&);
+command_result export_constraints(color_ostream&, std::vector<std::string>&);
+//
 
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
@@ -1990,21 +1995,16 @@ static command_result workflow_cmd(color_ostream &out, vector <string> & paramet
 }
 
 /******************************
-*  NUDIST                     *
+*  NUDIST import/export stuff *
 ******************************/
 
 command_result export_constraints(color_ostream& out, vector<string>& parameters)
 {
-    out.print("# parameters: %u\n", parameters.size());
-    for (auto& p : parameters)
-        out.print("%s\n", p);
-
-    std::fstream file("C:\\Users\\stephan\\Documents\\workshop.profile", std::ios::out);
     std::vector<PersistentDataItem> items;
+    std::vector<string> constraints;
+    std::fstream file("C:\\Users\\stephan\\Documents\\workshop.profile", std::ios::out);
 
-
-
-    if (!file.is_open())
+    if (!file.is_open() || !file.good())
     {
         out.print("%s\n", strerror(errno));
         return CR_FAILURE;
@@ -2012,35 +2012,69 @@ command_result export_constraints(color_ostream& out, vector<string>& parameters
 
     World::GetPersistentData(&items, "workflow/constraints");
     for (auto& i : items)
-        if (i.isValid() && file.good())
+    {
+        if (i.isValid())
         {
-            file << i.val().c_str() << ';' << i.ival(0) << ';' << i.ival(1) << std::endl;
-            out.print("# %s\n", i.val().c_str());
+            std::stringstream ss;
+            ss << i.val() << ';' << i.ival(0) << ';' << i.ival(1);
+            constraints.push_back(ss.str());
         }
-    file.close();
+        else
+            out.print("The application skipped an invalid constraint!\n");
+    }
+
+    file << profile_version << endl;
+    for (auto& i : constraints)
+    {
+        if (!file.good())
+        {
+            out.print("%s\nCritical failure, operation has been terminated!", strerror(errno));
+            break;
+        }
+        file << i << endl;
+    }
     return CR_OK;
 }
 
 command_result import_constraints(color_ostream& out, vector<string>& parameters)
 {
-    out.print("# parameters: %u\n", parameters.size());
-    for (auto& p : parameters)
-        out.print("%s\n", p);
+    std::vector<std::string> lines;
 
-    string profilePath = "C:\\Users\\stephan\\Documents\\workshop.profile";
-    //if (parameters.size() > 0)
-    //    profilePath = parameters[0];
-
-    std::ifstream file(profilePath.c_str(), std::ios::in);
-    
-    if (!file.is_open())
     {
-        out.print("%s\n", strerror(errno));
-        return CR_FAILURE;
+        std::string line;
+        std::regex re(R"###(^[A-Z_\/:,]+ (\d+ *)+$)###");
+        std::string profilePath = "C:\\Users\\stephan\\Documents\\workshop.profile";
+        std::ifstream file(profilePath, std::ios::in);
+        int line_number = 0;
+
+        if (!file.is_open())
+        {
+            out.print("%s\n", strerror(errno));
+            return CR_FAILURE;
+        }
+
+        std::getline(file, line);
+        if (std::regex_match(line, std::regex(R"###(^\d+$)###")) && std::stoi(line) < profile_compat)
+        {
+            out.print("The profile you are trying to import is not compatible with this version of DFHack!\nOperation has been terminated.");
+            return CR_FAILURE;
+        }
+
+        while (std::getline(file, line))
+        {
+            if (std::regex_match(line, re))
+                lines.push_back(line);
+            else
+                out.print("Skipped invalid constraint (#%u): %s\n", line, line_number);
+            line_number++;
+        }
+
+        if (!lines.size())
+            return CR_FAILURE;
     }
 
-    string line;
-    while (std::getline(file, line))
+
+    for (auto& line : lines)
     {
         /*
         Token[0] == ITEM[:SUBTYPE]/[GENERIC_MAT,...]/[SPECIFIC_MAT:...]/[LOCAL,<quality>]
@@ -2050,19 +2084,13 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
         std::vector<std::string> tokens;
         split_string(&tokens, line, ";");
 
-        if (tokens.size() < 3)
-        {
-            out.print("Error while parsing profile!\n");
-            continue;
-        }
-
         ItemConstraint *icv = get_constraint(out, tokens[0]);
         if (!icv)
             return CR_FAILURE;
         
-        icv->setGoalByCount(atoi(tokens[2].c_str()) == -1);
-        icv->setGoalCount(atoi(tokens[1].c_str()));
-        icv->setGoalGap(atoi(tokens[2].c_str()));
+        icv->setGoalByCount(stoi(tokens[2]) == -1);
+        icv->setGoalCount(stoi(tokens[1]));
+        icv->setGoalGap(stoi(tokens[2]));
         process_constraints(out);
         print_constraint(out, icv);
     }
