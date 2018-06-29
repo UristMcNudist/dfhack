@@ -73,8 +73,8 @@ static void cleanup_state(color_ostream &out);
 static int fix_job_postings(color_ostream *out = NULL, bool dry_run = false);
 
 // NUDIST import/export functionality
-const char profile_version = 1; // current profile version
-const char profile_compat = 1; // minimum compatible profile version, just in case
+const int profile_version = 1; // current profile version
+const int profile_compat = 1; // minimum compatible profile version, just in case
 command_result import_constraints(color_ostream&, std::vector<std::string>&);
 command_result export_constraints(color_ostream&, std::vector<std::string>&);
 //
@@ -2042,7 +2042,7 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
 
     {
         std::string line;
-        std::regex re(R"###(^[A-Z_\/:,]+ (\d+ *)+$)###");
+        std::regex re(R"###(^[a-zA-Z0-9\/_:,\-]+;\d+;(-\d|\d)+$)###");
         std::string profilePath = "C:\\Users\\stephan\\Documents\\workshop.profile";
         std::ifstream file(profilePath, std::ios::in);
         int line_number = 0;
@@ -2063,7 +2063,10 @@ command_result import_constraints(color_ostream& out, vector<string>& parameters
         while (std::getline(file, line))
         {
             if (std::regex_match(line, re))
-                lines.push_back(line);
+            {
+                if (line != "")
+                    lines.push_back(line);
+            }
             else
                 out.print("Skipped invalid constraint (#%u): %s\n", line, line_number);
             line_number++;
